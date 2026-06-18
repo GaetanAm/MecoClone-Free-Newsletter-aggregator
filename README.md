@@ -1,36 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 📬 MecoClone-Free-Newsletter-aggregator
 
-## Getting Started
+A self-hosted, lightweight, and open-source alternative to Meco and Substack readers. It automatically fetches your newsletters from your Gmail account, filters them using a whitelist, cleans up cluttered layouts, and purges old data automatically. 
 
-First, run the development server:
+Perfect for a clean, distraction-free reading experience on both Desktop and Mobile (PWA).
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+---
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## ✨ Features
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+* **Automated Sync**: Uses an IMAP sync script triggered every hour via GitHub Actions.
+* **Smart Filtering**: A Supabase-backed whitelist system ensures only authorized newsletter senders reach your feed.
+* **Distraction-Free Reading**: Injects custom CSS rules into an isolated `iframe` to strip out heavy marketing layouts and force a clean, elegant typography.
+* **Auto-Purge Security**: Automatically deletes newsletters older than 30 days from the database to keep storage lightweight and free.
+* **Mobile Ready (PWA)**: Optimized interface with custom manifest file. Can be installed directly onto an iPhone or Android home screen.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+---
 
-## Learn More
+## 🛠️ Tech Stack
 
-To learn more about Next.js, take a look at the following resources:
+* **Frontend**: Next.js (React), Tailwind CSS, TypeScript
+* **Backend & Database**: Supabase (PostgreSQL with RLS policies)
+* **Email Parsing**: Node.js, `imapflow`, `mailparser`
+* **Automation**: GitHub Actions (Cron-jobs)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 🚀 Getting Started
 
-## Deploy on Vercel
+### 1. Prerequisites
+* A Supabase account (Free tier)
+* A Gmail account with **IMAP enabled** and an **App Password** configured.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 2. Environment Variables
+Create a `.env.local` file at the root of the project:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```env
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+GMAIL_USER=your_gmail_address@gmail.com
+GMAIL_APP_PASSWORD=your_gmail_app_16_digit_password
