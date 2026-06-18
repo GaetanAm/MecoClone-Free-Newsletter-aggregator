@@ -225,6 +225,15 @@ export default function Home() {
     return true;
   });
 
+  // 📊 CALCUL DES STATS (Style Meco - image.png)
+  // 1. Temps total de lecture restant dans le Digest non lu
+  const totalUnreadReadingTime = newsletters
+    .filter(nl => !nl.is_read)
+    .reduce((sum, nl) => sum + (nl.reading_time_minutes || 1), 0);
+
+  // 2. Nombre total de newsletters lues (historique)
+  const totalReadCount = newsletters.filter(nl => nl.is_read).length;
+
   return (
     <main className="flex h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden pb-16 md:pb-0 relative">
       
@@ -318,7 +327,16 @@ export default function Home() {
             <header className="p-4 border-b border-slate-200 bg-slate-900 text-white">
               <h1 className="text-xl font-bold tracking-tight">⚙️ Config & Groupes</h1>
             </header>
+            
             <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 bg-slate-50/50">
+
+            {/* 📊 BLOC STATISTIQUES INSPIRED BY MECO (image.png) */}
+              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center text-center gap-1">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Temps de lecture en attente</span>
+                <span className="text-3xl font-black text-slate-900 font-sans">{totalUnreadReadingTime} {totalUnreadReadingTime > 1 ? 'minutes' : 'minute'}</span>
+                <span className="text-[10px] text-slate-400 mt-1">Bravo, tu as déjà lu {totalReadCount} newsletters au total !</span>
+              </div>
+              
               {/* Box Alerte Notification */}
               <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
                 <p className="text-xs font-semibold text-slate-700">Alerte Push iPhone</p>
