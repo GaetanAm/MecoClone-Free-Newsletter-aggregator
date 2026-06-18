@@ -18,24 +18,49 @@ interface Newsletter {
   is_read: boolean;
   is_favorite: boolean;
   reading_time_minutes: number;
+  group_name: string;
 }
 
 interface AllowedSender {
   id: string;
   email: string;
+  group_name: string;
 }
 
+interface Highlight {
+  id: string;
+  newsletter_id: string;
+  text: string;
+  created_at: string;
+  newsletters?: {
+    subject: string;
+    sender_name: string | null;
+  };
+}
+
+type Tab = 'digest' | 'bookmarks' | 'senders';
+
 export default function Home() {
+  // Onglet actif global (Style Meco Bottom Bar)
+  const [activeTab, setActiveTab] = useState<Tab>('digest');
+
   const [newsletters, setNewsletters] = useState<Newsletter[]>([]);
   const [selected, setSelected] = useState<Newsletter | null>(null);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'list' | 'reader'>('list');
-  const [filter, setFilter] = useState<'all' | 'favorites'>('all');
+  
+  // Filtre par groupe thématique (Onglet Digest)
+  const [selectedGroup, setSelectedGroup] = useState<string>('Tous');
 
+  // Whitelist & Gestion des groupes
   const [allowedSenders, setAllowedSenders] = useState<AllowedSender[]>([]);
-  const [showWhitelistModal, setShowWhitelistModal] = useState(false);
   const [newEmail, setNewEmail] = useState('');
+  const [newEmailGroup, setNewEmailGroup] = useState('Général');
   const [whitelistLoading, setWhitelistLoading] = useState(false);
+
+  // Carnet de notes (Highlights)
+  const [highlights, setHighlights] = useState<Highlight[]>([]);
+  const [bookmarkSubTab, setBookmarkSubTab] = useState<'favs' | 'highlights'>('favs');
 
   const fetchNewsletters = async () => {
     setLoading(true);
@@ -61,9 +86,30 @@ export default function Home() {
     }
   };
 
+  const fetchHighlights = async () => {
+    const { data, error } = await supabase
+      .from('highlights')
+      .select(`
+        id,
+        newsletter_id,
+        text,
+        created_at,
+        newsletters (
+          subject,
+          sender_name
+        )
+      `)
+      .order('created_at', { ascending: false });
+
+    if (!error && data) {
+      setHighlights(data as any);
+    }
+  };
+
   useEffect(() => {
     fetchNewsletters();
     fetchWhitelist();
+    fetchHighlights();
   }, []);
 
   const markAsRead = async (id: string) => {
@@ -107,7 +153,7 @@ export default function Home() {
 
     const { data, error } = await supabase
       .from('allowed_senders')
-      .insert([{ email: emailToInsert }])
+      .insert([{ email: emailToInsert, group_name: newEmailGroup }])
       .select();
 
     if (!error && data) {
@@ -125,169 +171,220 @@ export default function Home() {
     if (!error) setAllowedSenders(prev => prev.filter(s => s.id !== id));
   };
 
-  // 💡 FONCTION POUR ACTIVER LES NOTIFICATIONS SUR TON IPHONE
+  // Ajouter une citation / Surlignage
+  const handleAddHighlight = async () => {
+    if (!selected) return;
+    const quote = prompt("Entrez ou collez la phrase importante à sauvegarder :");
+    if (!quote || !quote.trim()) return;
+
+    const { data, error } = await supabase
+      .from('highlights')
+      .insert([{ newsletter_id: selected.id, text: quote.trim() }])
+      .select();
+
+    if (!error) {
+      alert("✍️ Extrait sauvegardé dans vos Highlights !");
+      fetchHighlights();
+    }
+  };
+
+  const handleRemoveHighlight = async (id: string) => {
+    if (!confirm('Supprimer cet extrait ?')) return;
+    const { error } = await supabase.from('highlights').delete().eq('id', id);
+    if (!error) setHighlights(prev => prev.filter(h => h.id !== id));
+  };
+
+  // Notifications push d'iOS
   const subscribeToPush = async () => {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-      alert("Les notifications push ne sont supportées que si l'application est installée sur ton écran d'accueil iPhone.");
+      alert("Abonnement impossible : assurez-vous d'avoir installé l'application sur l'écran d'accueil.");
       return;
     }
-
     try {
       const permission = await Notification.requestPermission();
-      if (permission !== 'granted') {
-        alert("Permission de notification refusée.");
-        return;
-      }
-
+      if (permission !== 'granted') return alert("Permission refusée.");
       const registration = await navigator.serviceWorker.register('/sw.js');
-      
       const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-      if (!publicKey) {
-        alert("Clé publique VAPID introuvable dans le fichier d'environnement.");
-        return;
-      }
-
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: publicKey
       });
-
-      const { error } = await supabase
-        .from('push_subscriptions')
-        .insert([{ subscription: subscription.toJSON() }]);
-
-      if (error) {
-        console.error(error);
-        alert("Erreur lors de la sauvegarde de l'abonnement sur Supabase.");
-      } else {
-        alert("🔔 Notifications activées avec succès ! Ton iPhone va vibrer à chaque nouvelle édition.");
-      }
-
+      await supabase.from('push_subscriptions').insert([{ subscription: subscription.toJSON() }]);
+      alert("🔔 Notifications activées !");
     } catch (err) {
-      console.error("Erreur d'abonnement:", err);
-      alert("Impossible d'activer les notifications. Vérifie que tu es bien sur l'app installée via ton écran d'accueil.");
+      alert("Erreur d'activation.");
     }
   };
 
+  // Liste unique des groupes créés pour les filtres du haut
+  const uniqueGroups = ['Tous', ...Array.from(new Set(allowedSenders.map(s => s.group_name)))];
+
+  // Filtrage intelligent de la liste
   const displayedNewsletters = newsletters.filter(nl => {
-    if (filter === 'favorites') return nl.is_favorite;
+    if (selectedGroup !== 'Tous' && nl.group_name !== selectedGroup) return false;
     return true;
   });
 
   return (
-    <main className="flex h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
+    <main className="flex h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden pb-16 md:pb-0 relative">
       
-      {/* Colonne Gauche : Liste */}
+      {/* ========================================================= */}
+      {/* COLONNE GAUCHE : DYNAMIQUE SELON L'ONGLET SÉLECTIONNÉ     */}
+      {/* ========================================================= */}
       <section className={`w-full md:w-1/3 border-r border-slate-200 bg-white flex flex-col h-full ${viewMode === 'reader' ? 'hidden md:flex' : 'flex'}`}>
-        <header className="p-4 border-b border-slate-200 bg-slate-900 text-white sticky top-0 z-10 flex flex-col gap-3">
-          <div className="flex justify-between items-center">
-            <h1 className="text-xl font-bold tracking-tight">📬 Mon Méco</h1>
-            <div className="flex gap-2">
-              <button 
-                onClick={() => setShowWhitelistModal(true)} 
-                className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded-md transition text-xs"
-              >
-                ⚙️ Whitelist
-              </button>
-              <button onClick={fetchNewsletters} className="px-2.5 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 rounded-md transition">
-                🔄
-              </button>
-            </div>
-          </div>
-          
-          <div className="flex bg-slate-850 p-0.5 rounded-lg border border-slate-700 text-xs">
-            <button 
-              onClick={() => setFilter('all')}
-              className={`flex-1 py-1.5 text-center rounded-md font-medium transition ${filter === 'all' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
-            >
-              Tous ({newsletters.length})
-            </button>
-            <button 
-              onClick={() => setFilter('favorites')}
-              className={`flex-1 py-1.5 text-center rounded-md font-medium transition ${filter === 'favorites' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
-            >
-              ⭐ Favoris ({newsletters.filter(n => n.is_favorite).length})
-            </button>
-          </div>
-        </header>
-
-        <div className="flex-1 overflow-y-auto divide-y divide-slate-100 pb-10">
-          {loading ? (
-            <p className="p-4 text-center text-slate-500">Chargement...</p>
-          ) : displayedNewsletters.length === 0 ? (
-            <p className="p-4 text-center text-slate-400 text-sm">Aucun message trouvé.</p>
-          ) : (
-            displayedNewsletters.map((nl) => (
-              <div
-                key={nl.id}
-                onClick={() => {
-                  setSelected(nl);
-                  setViewMode('reader');
-                  if (!nl.is_read) markAsRead(nl.id);
-                }}
-                className={`p-4 cursor-pointer transition-colors border-l-4 flex flex-col gap-1.5 ${
-                  selected?.id === nl.id ? 'bg-blue-50/70 border-blue-600' : 'hover:bg-slate-50 border-transparent'
-                }`}
-              >
-                <div className="flex justify-between items-baseline">
-                  <span className={`text-sm truncate max-w-[180px] ${!nl.is_read ? 'font-bold text-slate-900' : 'text-slate-600'}`}>
-                    {nl.sender_name || nl.sender_email}
-                  </span>
-                  <span className="text-xs text-slate-400 shrink-0">
-                    {new Date(nl.received_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
-                  </span>
-                </div>
-                
-                <h2 className={`text-sm line-clamp-1 ${!nl.is_read ? 'font-semibold text-slate-900' : 'text-slate-500'}`}>
-                  {nl.subject}
-                </h2>
-
-                <div className="flex justify-between items-center mt-1">
-                  <span className="text-[11px] px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full font-medium">
-                    ⏱️ {nl.reading_time_minutes} min
-                  </span>
-                  
-                  <button 
-                    onClick={(e) => toggleFavorite(e, nl)}
-                    className="text-base p-1 rounded hover:bg-slate-100/80 transition-transform active:scale-95"
+        
+        {/* ONGLET 1 : DIGEST (Boîte principale) */}
+        {activeTab === 'digest' && (
+          <>
+            <header className="p-4 border-b border-slate-200 bg-slate-900 text-white flex flex-col gap-3">
+              <div className="flex justify-between items-center">
+                <h1 className="text-xl font-bold tracking-tight">📥 Digest</h1>
+                <button onClick={fetchNewsletters} className="px-2.5 py-1.5 text-xs bg-slate-800 rounded-md">🔄</button>
+              </div>
+              {/* Horizontal Scroll Bar pour les groupes (Style image_3.png) */}
+              <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
+                {uniqueGroups.map(group => (
+                  <button
+                    key={group} onClick={() => setSelectedGroup(group)}
+                    className={`px-3 py-1.5 rounded-full shrink-0 font-medium transition-colors ${selectedGroup === group ? 'bg-white text-slate-900' : 'bg-slate-800 text-slate-300'}`}
                   >
-                    {nl.is_favorite ? '⭐' : '☆'}
+                    {group}
                   </button>
+                ))}
+              </div>
+            </header>
+            <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
+              {loading ? <p className="p-4 text-center text-slate-500">Chargement...</p> : 
+               displayedNewsletters.length === 0 ? <p className="p-4 text-center text-slate-400">Aucun message dans {selectedGroup}.</p> :
+               displayedNewsletters.map(nl => (
+                <div key={nl.id} onClick={() => { setSelected(nl); setViewMode('reader'); if(!nl.is_read) markAsRead(nl.id); }}
+                     className={`p-4 cursor-pointer border-l-4 flex flex-col gap-1.5 ${selected?.id === nl.id ? 'bg-blue-50/70 border-blue-600' : 'border-transparent hover:bg-slate-50'}`}>
+                  <div className="flex justify-between items-baseline">
+                    <span className={`text-sm truncate max-w-[180px] ${!nl.is_read ? 'font-bold' : 'text-slate-600'}`}>{nl.sender_name}</span>
+                    <span className="text-xs text-slate-400">{new Date(nl.received_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</span>
+                  </div>
+                  <h2 className={`text-sm line-clamp-1 ${!nl.is_read ? 'font-semibold' : 'text-slate-500'}`}>{nl.subject}</h2>
+                  <div className="flex justify-between items-center mt-1">
+                    <span className="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full font-medium">⏱️ {nl.reading_time_minutes} min • {nl.group_name}</span>
+                    <button onClick={(e) => toggleFavorite(e, nl)} className="text-sm p-1">{nl.is_favorite ? '⭐' : '☆'}</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* ONGLET 2 : BOOKMARKS (Favoris & Extraits - Style image_2.png) */}
+        {activeTab === 'bookmarks' && (
+          <>
+            <header className="p-4 border-b border-slate-200 bg-slate-900 text-white flex flex-col gap-3">
+              <h1 className="text-xl font-bold tracking-tight">🔖 Bookmarks</h1>
+              <div className="flex bg-slate-800 p-0.5 rounded-lg text-xs">
+                <button onClick={() => setBookmarkSubTab('favs')} className={`flex-1 py-1.5 text-center rounded-md font-medium ${bookmarkSubTab === 'favs' ? 'bg-white text-slate-900' : 'text-slate-400'}`}>Newsletters</button>
+                <button onClick={() => setBookmarkSubTab('highlights')} className={`flex-1 py-1.5 text-center rounded-md font-medium ${bookmarkSubTab === 'highlights' ? 'bg-white text-slate-900' : 'text-slate-400'}`}>Highlights</button>
+              </div>
+            </header>
+            <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
+              {bookmarkSubTab === 'favs' ? (
+                newsletters.filter(n => n.is_favorite).length === 0 ? <p className="p-6 text-center text-slate-400 text-sm">Aucun favori enregistré.</p> :
+                newsletters.filter(n => n.is_favorite).map(nl => (
+                  <div key={nl.id} onClick={() => { setSelected(nl); setViewMode('reader'); }} className="p-4 cursor-pointer hover:bg-slate-50 flex flex-col gap-1.5">
+                    <div className="flex justify-between items-baseline">
+                      <span className="text-sm font-bold text-slate-900">{nl.sender_name}</span>
+                      <span className="text-xs text-slate-400">{new Date(nl.received_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</span>
+                    </div>
+                    <h2 className="text-sm text-slate-700 line-clamp-1">{nl.subject}</h2>
+                  </div>
+                ))
+              ) : (
+                highlights.length === 0 ? <p className="p-6 text-center text-slate-400 text-sm">Aucune citation surlignée.</p> :
+                highlights.map(h => (
+                  <div key={h.id} className="p-4 flex flex-col gap-2 bg-amber-50/40 border-l-4 border-amber-400">
+                    <p className="text-sm italic text-slate-800 font-serif">"{h.text}"</p>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] text-slate-400 truncate max-w-[180px]">Issu de : {h.newsletters?.sender_name || 'Newsletter'}</span>
+                      <button onClick={() => handleRemoveHighlight(h.id)} className="text-xs text-red-500">🗑️</button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </>
+        )}
+
+        {/* ONGLET 3 : PARAMÈTRES & GROUPES (Style image_1.png / image_5.png) */}
+        {activeTab === 'senders' && (
+          <>
+            <header className="p-4 border-b border-slate-200 bg-slate-900 text-white">
+              <h1 className="text-xl font-bold tracking-tight">⚙️ Config & Groupes</h1>
+            </header>
+            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 bg-slate-50/50">
+              {/* Box Alerte Notification */}
+              <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
+                <p className="text-xs font-semibold text-slate-700">Alerte Push iPhone</p>
+                <button onClick={subscribeToPush} className="w-full py-2 bg-slate-900 text-white font-medium rounded-lg text-xs shadow-sm">🔔 Activer les notifications push</button>
+              </div>
+
+              {/* Formulaire ajout avec Catégorie */}
+              <form onSubmit={handleAddEmail} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-3">
+                <p className="text-xs font-semibold text-slate-700">Ajouter un expéditeur</p>
+                <input type="email" placeholder="news@finimize.com" value={newEmail} onChange={e => setNewEmail(e.target.value)} required className="w-full px-3 py-2 border rounded-lg text-xs focus:ring-1 focus:ring-slate-900"/>
+                <div className="flex gap-2 items-center">
+                  <label className="text-[11px] text-slate-400 shrink-0">Groupe :</label>
+                  <select value={newEmailGroup} onChange={e => setNewEmailGroup(e.target.value)} className="flex-1 bg-slate-100 px-2 py-1.5 rounded-md text-xs font-medium border-0">
+                    <option value="Général">📁 Général</option>
+                    <option value="Tech">🤖 Tech</option>
+                    <option value="Finance">📈 Finance</option>
+                    <option value="Sport">🚴 Sport</option>
+                    <option value="Veille">📚 Veille</option>
+                  </select>
+                </div>
+                <button type="submit" disabled={whitelistLoading} className="w-full py-2 bg-blue-600 text-white rounded-lg text-xs font-medium">Ajouter à la Whitelist</button>
+              </form>
+
+              {/* Liste complète des Senders (Style image_5.png) */}
+              <div className="flex flex-col gap-2">
+                <p className="text-xs font-bold text-slate-400 tracking-wider uppercase px-1">Whitelisted Senders</p>
+                <div className="divide-y divide-slate-100 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                  {allowedSenders.map(s => (
+                    <div key={s.id} className="flex justify-between items-center p-3 hover:bg-slate-50">
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-xs font-semibold text-slate-800 truncate">{s.email}</span>
+                        <span className="text-[10px] text-slate-400">Dossier : {s.group_name}</span>
+                      </div>
+                      <button onClick={() => handleRemoveEmail(s.id)} className="text-xs p-1">🗑️</button>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))
-          )}
-        </div>
+            </div>
+          </>
+        )}
       </section>
 
-      {/* Colonne Droite : Lecteur */}
+      {/* ========================================================= */}
+      {/* COLONNE DROITE : LE LECTEUR DE NEWSLETTER                 */}
+      {/* ========================================================= */}
       <section className={`w-full md:w-2/3 flex flex-col h-full bg-white ${viewMode === 'list' ? 'hidden md:flex' : 'flex'}`}>
         {selected ? (
           <div className="flex flex-col h-full">
-            <div className="p-4 md:p-6 border-b border-slate-200 bg-slate-50/50 flex items-center justify-between gap-3">
+            <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
-                <button onClick={() => setViewMode('list')} className="md:hidden p-2 text-slate-600 bg-white border border-slate-200 rounded-md shadow-sm text-sm">
-                  ⬅️ Liste
-                </button>
+                <button onClick={() => setViewMode('list')} className="md:hidden px-2.5 py-1.5 text-slate-600 bg-white border border-slate-200 rounded-md text-xs font-medium">⬅️ Retour</button>
                 <div className="min-w-0">
-                  <h1 className="text-base md:text-xl font-bold text-slate-900 truncate">{selected.subject}</h1>
-                  <p className="text-xs text-slate-500 truncate">De : {selected.sender_name || selected.sender_email}</p>
+                  <h1 className="text-sm md:text-base font-bold text-slate-900 truncate">{selected.subject}</h1>
+                  <p className="text-xs text-slate-500">De : {selected.sender_name} • <span className="text-slate-400">{selected.group_name}</span></p>
                 </div>
               </div>
-              <button 
-                onClick={(e) => toggleFavorite(e, selected)}
-                className="p-2 border border-slate-200 rounded-lg bg-white shadow-sm hover:bg-slate-50 text-lg transition"
-              >
-                {selected.is_favorite ? '⭐' : '☆'}
-              </button>
+              <div className="flex items-center gap-2">
+                {/* Bouton Surligner */}
+                <button onClick={handleAddHighlight} className="p-2 border border-slate-200 bg-white rounded-lg text-xs font-medium shadow-sm active:bg-slate-50" title="Surligner une phrase">✍️ Citation</button>
+                <button onClick={(e) => toggleFavorite(e, selected)} className="p-2 border border-slate-200 rounded-lg bg-white shadow-sm text-sm">{selected.is_favorite ? '⭐' : '☆'}</button>
+              </div>
             </div>
 
-            <div className="flex-1 bg-white p-2 md:p-4 overflow-hidden h-full">
-              <iframe
-                title="Newsletter Content"
-                srcDoc={selected.body_html}
-                className="w-full h-full border-0 bg-white"
-                sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin"
+            <div className="flex-1 bg-white p-1 overflow-hidden h-full">
+              <iframe title="Newsletter Content" srcDoc={selected.body_html} className="w-full h-full border-0 bg-white" sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin"
                 onLoad={(e) => {
                   try {
                     const iframe = e.currentTarget;
@@ -295,7 +392,7 @@ export default function Home() {
                     if (iframeDoc) {
                       const style = iframeDoc.createElement('style');
                       style.innerHTML = `
-                        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.6; color: #1e293b; max-width: 680px; margin: 0 auto; padding: 10px; }
+                        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.6; color: #1e293b; max-width: 680px; margin: 0 auto; padding: 12px; }
                         img { max-width: 100% !important; height: auto !important; border-radius: 8px; }
                       `;
                       iframeDoc.head.appendChild(style);
@@ -307,56 +404,30 @@ export default function Home() {
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-slate-400">
-            <span className="text-4xl mb-2">📖</span>
-            <p>Sélectionne une newsletter pour commencer la lecture.</p>
+            <span className="text-3xl mb-2">📖</span>
+            <p className="text-sm">Sélectionnez un message pour démarrer.</p>
           </div>
         )}
       </section>
 
-      {/* MODALE : Gestion Whitelist & Notifications */}
-      {showWhitelistModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md flex flex-col max-h-[85vh]">
-            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-xl">
-              <h2 className="text-lg font-bold text-slate-900">⚙️ Paramètres</h2>
-              <button onClick={() => setShowWhitelistModal(false)} className="text-slate-400 text-xl font-medium">✕</button>
-            </div>
-            
-            <form onSubmit={handleAddEmail} className="p-4 border-b border-slate-100 flex gap-2">
-              <input
-                type="email" placeholder="Ex: news@finimize.com" value={newEmail}
-                onChange={(e) => setNewEmail(e.target.value)} required
-                className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
-              />
-              <button type="submit" disabled={whitelistLoading} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium">
-                Ajouter
-              </button>
-            </form>
+      {/* ========================================================= */}
+      {/* BOTTOM NAVIGATION BAR (Style Meco Officiel / image_2.png) */}
+      {/* ========================================================= */}
+      <nav className="fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-slate-200 flex items-center justify-around z-40 md:hidden shadow-lg px-2">
+        <button onClick={() => { setActiveTab('digest'); setViewMode('list'); }} className={`flex flex-col items-center justify-center flex-1 h-full gap-0.5 ${activeTab === 'digest' ? 'text-slate-900 font-bold' : 'text-slate-400'}`}>
+          <span className="text-xl">📥</span>
+          <span className="text-[10px] tracking-wide">Digest</span>
+        </button>
+        <button onClick={() => { setActiveTab('bookmarks'); setViewMode('list'); }} className={`flex flex-col items-center justify-center flex-1 h-full gap-0.5 ${activeTab === 'bookmarks' ? 'text-slate-900 font-bold' : 'text-slate-400'}`}>
+          <span className="text-xl">🔖</span>
+          <span className="text-[10px] tracking-wide">Bookmarks</span>
+        </button>
+        <button onClick={() => { setActiveTab('senders'); setViewMode('list'); }} className={`flex flex-col items-center justify-center flex-1 h-full gap-0.5 ${activeTab === 'senders' ? 'text-slate-900 font-bold' : 'text-slate-400'}`}>
+          <span className="text-xl">⚙️</span>
+          <span className="text-[10px] tracking-wide">Groups</span>
+        </button>
+      </nav>
 
-            {/* 💡 BLOC BOUTON NOTIFICATIONS */}
-            <div className="p-4 border-b border-slate-100 bg-blue-50/50 flex flex-col gap-2">
-              <p className="text-xs text-slate-600 font-medium">Alerte iPhone en temps réel :</p>
-              <button
-                onClick={subscribeToPush}
-                className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-lg text-sm shadow-sm transition active:scale-98 flex items-center justify-center gap-2"
-              >
-                🔔 Activer les notifications push
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-2 bg-slate-50/50 max-h-[30vh]">
-              <div className="divide-y divide-slate-100 bg-white rounded-lg border border-slate-100">
-                {allowedSenders.map(s => (
-                  <div key={s.id} className="flex justify-between items-center p-2.5">
-                    <span className="text-sm text-slate-700 truncate">{s.email}</span>
-                    <button onClick={() => handleRemoveEmail(s.id)} className="text-xs text-red-500 p-1">🗑️</button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </main>
   );
 }
