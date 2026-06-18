@@ -63,7 +63,7 @@ async function sync() {
         const sender = parsed.from?.value[0];
         const senderEmail = sender?.address?.toLowerCase() || '';
         const subject = parsed.subject || '(Sans objet)';
-        // LIGNE ICI POUR VOIR TOUS LES MAILS PASSÉES EN REVUE :
+        
         console.log(`Analyse en cours : "${subject}" de [${senderEmail}]`);
 
         if (!allowedEmailsSet.has(senderEmail)) {
@@ -72,7 +72,12 @@ async function sync() {
 
         const bodyHtml = parsed.html || parsed.textAsHtml || parsed.text;
 
-        // Insertion avec sécurité anti-doublon (on insère le gmail_id)
+        // ⏱️ CALCUL DU TEMPS DE LECTURE (Moyenne de 200 mots par minute)
+        const textOnly = parsed.text || '';
+        const wordCount = textOnly.split(/\s+/).filter(word => word.length > 0).length;
+        const readingTime = Math.max(1, Math.ceil(wordCount / 200));
+
+        // Insertion avec sécurité anti-doublon et nouvelles colonnes
         const { error } = await supabase.from('newsletters').insert({
           gmail_id: gmailId,
           sender_name: sender?.name || null,
@@ -80,18 +85,18 @@ async function sync() {
           subject: subject,
           body_html: bodyHtml,
           received_at: parsed.date ? parsed.date.toISOString() : new Date().toISOString(),
-          is_read: false
+          is_read: false,
+          reading_time_minutes: readingTime // 💡 Ajout du temps calculé
         });
 
         if (error) {
           if (error.code === '23505') {
-            // Code 23505 = Doublon bloqué par Supabase (Unique violation)
             console.log(`⏩ Déjà importé : "${subject}"`);
           } else {
             console.error(`❌ Erreur Supabase :`, error.message);
           }
         } else {
-          console.log(`💾 Sauvegardé : "${subject}" de ${senderEmail}`);
+          console.log(`💾 Sauvegardé [⏱️ ${readingTime} min] : "${subject}" de ${senderEmail}`);
         }
         
         // On le marque comme lu dans Gmail pour ne plus s'en occuper
@@ -100,17 +105,18 @@ async function sync() {
     }
 
     // =========================================================
-    // SÉCURITÉ NETTOYAGE : Supprimer les newsletters de plus de 30 jours
+    // SÉCURITÉ NETTOYAGE : Supprimer les newsletters de plus de 30 jours (SAUF LES FAVORIS)
     // =========================================================
     console.log('🧹 Nettoyage des vieilles newsletters dans Supabase...');
     const expirationDate = new Date();
-    expirationDate.setDate(expirationDate.getDate() - 30); // Il y a 30 jours
+    expirationDate.setDate(expirationDate.getDate() - 30);
 
     const { count, error: deleteError } = await supabase
       .from('newsletters')
       .delete({ count: 'exact' })
-      .lt('received_at', expirationDate.toISOString()); // Moins que (plus vieux que) 30 jours
-
+      .lt('received_at', expirationDate.toISOString())
+      .eq('is_favorite', false); // 💡 Protège les favoris de la suppression
+    
     if (deleteError) {
       console.error('❌ Erreur lors du nettoyage :', deleteError.message);
     } else {
