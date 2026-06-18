@@ -336,7 +336,7 @@ export default function Home() {
                 <span className="text-3xl font-black text-slate-900 font-sans">{totalUnreadReadingTime} {totalUnreadReadingTime > 1 ? 'minutes' : 'minute'}</span>
                 <span className="text-[10px] text-slate-400 mt-1">Bravo, tu as déjà lu {totalReadCount} newsletters au total !</span>
               </div>
-              
+
               {/* Box Alerte Notification */}
               <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
                 <p className="text-xs font-semibold text-slate-700">Alerte Push iPhone</p>
@@ -429,20 +429,31 @@ export default function Home() {
       </section>
 
       {/* ========================================================= */}
-      {/* BOTTOM NAVIGATION BAR (Style Meco Officiel / image_2.png) */}
+      {/* BOTTOM NAVIGATION BAR (Style Liquid Glass Floating Bar)    */}
       {/* ========================================================= */}
-      <nav className="fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-slate-200 flex items-center justify-around z-40 md:hidden shadow-lg px-2">
-        <button onClick={() => { setActiveTab('digest'); setViewMode('list'); }} className={`flex flex-col items-center justify-center flex-1 h-full gap-0.5 ${activeTab === 'digest' ? 'text-slate-900 font-bold' : 'text-slate-400'}`}>
+      <nav className="fixed bottom-4 left-4 right-4 h-16 bg-white/70 backdrop-blur-xl border border-white/40 flex items-center justify-around z-40 md:hidden rounded-2xl shadow-[0_8px_32px_0_rgba(0,0,0,0.08)] px-2 transition-all">
+        <button 
+          onClick={() => { setActiveTab('digest'); setViewMode('list'); }} 
+          className={`flex flex-col items-center justify-center flex-1 h-full gap-0.5 rounded-xl transition-colors ${activeTab === 'digest' ? 'text-slate-950 font-bold bg-slate-900/5' : 'text-slate-500 hover:text-slate-900'}`}
+        >
           <span className="text-xl">📥</span>
-          <span className="text-[10px] tracking-wide">Digest</span>
+          <span className="text-[10px] tracking-wide font-medium">Digest</span>
         </button>
-        <button onClick={() => { setActiveTab('bookmarks'); setViewMode('list'); }} className={`flex flex-col items-center justify-center flex-1 h-full gap-0.5 ${activeTab === 'bookmarks' ? 'text-slate-900 font-bold' : 'text-slate-400'}`}>
+        
+        <button 
+          onClick={() => { setActiveTab('bookmarks'); setViewMode('list'); }} 
+          className={`flex flex-col items-center justify-center flex-1 h-full gap-0.5 rounded-xl transition-colors ${activeTab === 'bookmarks' ? 'text-slate-950 font-bold bg-slate-900/5' : 'text-slate-500 hover:text-slate-900'}`}
+        >
           <span className="text-xl">🔖</span>
-          <span className="text-[10px] tracking-wide">Bookmarks</span>
+          <span className="text-[10px] tracking-wide font-medium">Bookmarks</span>
         </button>
-        <button onClick={() => { setActiveTab('senders'); setViewMode('list'); }} className={`flex flex-col items-center justify-center flex-1 h-full gap-0.5 ${activeTab === 'senders' ? 'text-slate-900 font-bold' : 'text-slate-400'}`}>
+        
+        <button 
+          onClick={() => { setActiveTab('senders'); setViewMode('list'); }} 
+          className={`flex flex-col items-center justify-center flex-1 h-full gap-0.5 rounded-xl transition-colors ${activeTab === 'senders' ? 'text-slate-950 font-bold bg-slate-900/5' : 'text-slate-500 hover:text-slate-900'}`}
+        >
           <span className="text-xl">⚙️</span>
-          <span className="text-[10px] tracking-wide">Groups</span>
+          <span className="text-[10px] tracking-wide font-medium">Groups</span>
         </button>
       </nav>
 
