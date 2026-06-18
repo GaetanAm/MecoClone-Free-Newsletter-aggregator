@@ -112,8 +112,16 @@ async function main() {
           const bodyHtml = parsed.html || parsed.textAsHtml || parsed.text || '';
           
           // Calcul du temps de lecture (200 mots/minute)
-          const textOnly = parsed.text || '';
-          const wordCount = textOnly.split(/\s+/).filter(word => word.length > 0).length;
+          let textToCount = parsed.text || '';
+          // Si le texte brut est absent, on nettoie le HTML pour compter les vrais mots
+          if (!textToCount && bodyHtml) {
+            textToCount = bodyHtml
+              .replace(/<style([\s\S]*?)<\/style>/gi, '') // Enlever le CSS inline
+              .replace(/<script([\s\S]*?)<\/script>/gi, '') // Enlever le JS
+              .replace(/<\/?[^>]+(>|$)/g, ' ') // Remplacer les balises HTML par des espaces
+              .replace(/&nbsp;/g, ' '); // Nettoyer les espaces insécables
+          }
+          const wordCount = textToCount.split(/\s+/).filter(word => word.length > 0).length;
           const readingTime = Math.max(1, Math.ceil(wordCount / 200));
 
           const senderName = sender?.name || senderEmail.split('@')[0];
