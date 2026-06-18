@@ -80,7 +80,7 @@ export default function Home() {
   };
 
   const toggleFavorite = async (e: React.MouseEvent, nl: Newsletter) => {
-    e.stopPropagation(); // Évite de sélectionner/ouvrir le mail en cliquant sur l'étoile
+    e.stopPropagation();
     const nextState = !nl.is_favorite;
 
     const { error } = await supabase
@@ -125,7 +125,50 @@ export default function Home() {
     if (!error) setAllowedSenders(prev => prev.filter(s => s.id !== id));
   };
 
-  // Filtrage des newsletters affichées
+  // 💡 FONCTION POUR ACTIVER LES NOTIFICATIONS SUR TON IPHONE
+  const subscribeToPush = async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      alert("Les notifications push ne sont supportées que si l'application est installée sur ton écran d'accueil iPhone.");
+      return;
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        alert("Permission de notification refusée.");
+        return;
+      }
+
+      const registration = await navigator.serviceWorker.register('/sw.js');
+      
+      const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!publicKey) {
+        alert("Clé publique VAPID introuvable dans le fichier d'environnement.");
+        return;
+      }
+
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: publicKey
+      });
+
+      const { error } = await supabase
+        .from('push_subscriptions')
+        .insert([{ subscription: subscription.toJSON() }]);
+
+      if (error) {
+        console.error(error);
+        alert("Erreur lors de la sauvegarde de l'abonnement sur Supabase.");
+      } else {
+        alert("🔔 Notifications activées avec succès ! Ton iPhone va vibrer à chaque nouvelle édition.");
+      }
+
+    } catch (err) {
+      console.error("Erreur d'abonnement:", err);
+      alert("Impossible d'activer les notifications. Vérifie que tu es bien sur l'app installée via ton écran d'accueil.");
+    }
+  };
+
   const displayedNewsletters = newsletters.filter(nl => {
     if (filter === 'favorites') return nl.is_favorite;
     return true;
@@ -152,7 +195,6 @@ export default function Home() {
             </div>
           </div>
           
-          {/* Onglets Filtres (Tous vs Favoris) */}
           <div className="flex bg-slate-850 p-0.5 rounded-lg border border-slate-700 text-xs">
             <button 
               onClick={() => setFilter('all')}
@@ -201,15 +243,13 @@ export default function Home() {
                 </h2>
 
                 <div className="flex justify-between items-center mt-1">
-                  {/* Badge temps de lecture */}
                   <span className="text-[11px] px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full font-medium">
                     ⏱️ {nl.reading_time_minutes} min
                   </span>
                   
-                  {/* Bouton Favori Étoile */}
                   <button 
                     onClick={(e) => toggleFavorite(e, nl)}
-                    className={`text-base p-1 rounded hover:bg-slate-100/80 transition-transform active:scale-95`}
+                    className="text-base p-1 rounded hover:bg-slate-100/80 transition-transform active:scale-95"
                   >
                     {nl.is_favorite ? '⭐' : '☆'}
                   </button>
@@ -273,14 +313,15 @@ export default function Home() {
         )}
       </section>
 
-      {/* MODALE : Gestion Whitelist */}
+      {/* MODALE : Gestion Whitelist & Notifications */}
       {showWhitelistModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md flex flex-col max-h-[85vh]">
             <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-xl">
-              <h2 className="text-lg font-bold text-slate-900">⚙️ Whitelist</h2>
+              <h2 className="text-lg font-bold text-slate-900">⚙️ Paramètres</h2>
               <button onClick={() => setShowWhitelistModal(false)} className="text-slate-400 text-xl font-medium">✕</button>
             </div>
+            
             <form onSubmit={handleAddEmail} className="p-4 border-b border-slate-100 flex gap-2">
               <input
                 type="email" placeholder="Ex: news@finimize.com" value={newEmail}
@@ -291,7 +332,19 @@ export default function Home() {
                 Ajouter
               </button>
             </form>
-            <div className="flex-1 overflow-y-auto p-2 bg-slate-50/50 max-h-[40vh]">
+
+            {/* 💡 BLOC BOUTON NOTIFICATIONS */}
+            <div className="p-4 border-b border-slate-100 bg-blue-50/50 flex flex-col gap-2">
+              <p className="text-xs text-slate-600 font-medium">Alerte iPhone en temps réel :</p>
+              <button
+                onClick={subscribeToPush}
+                className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-lg text-sm shadow-sm transition active:scale-98 flex items-center justify-center gap-2"
+              >
+                🔔 Activer les notifications push
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-2 bg-slate-50/50 max-h-[30vh]">
               <div className="divide-y divide-slate-100 bg-white rounded-lg border border-slate-100">
                 {allowedSenders.map(s => (
                   <div key={s.id} className="flex justify-between items-center p-2.5">
