@@ -1,0 +1,32 @@
+name: Synchronisation automatique des Newsletters
+
+on:
+  schedule:
+    # S'exécute toutes les heures (00 minute de chaque heure)
+    - cron: '0 * * * *'
+  workflow_dispatch: # Permet aussi de lancer le script manuellement depuis GitHub
+
+jobs:
+  sync-emails:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Récupérer le code du dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js
+        uses: actions/uses/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Installer les dépendances
+        run: npm install imapflow mailparser @supabase/supabase-js dotenv
+
+      - name: Executer le script de synchronisation
+        run: node scripts/sync-emails.js
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
