@@ -68,13 +68,15 @@ async function main() {
 
   let lock = await client.getMailboxLock('INBOX');
   try {
-    // 1. Récupérer la liste blanche
+    // 1. Récupérer la liste blanche avec les groupes
     const { data: whitelistData, error: whitelistError } = await supabase
       .from('allowed_senders')
-      .select('email');
+      .select('email, group_name');
 
     if (whitelistError) throw whitelistError;
-    const allowedEmails = new Set(whitelistData.map(item => item.email.toLowerCase()));
+    
+    // On crée une map pour associer l'email à son groupe
+    const allowedEmails = new Map(whitelistData.map(item => [item.email.toLowerCase(), item.group_name]));
 
     // 2. Recherche optimisée des messages non lus des 7 derniers jours
     console.log('🔍 Recherche des messages non lus récents (7 derniers jours)...');
@@ -125,6 +127,7 @@ async function main() {
           const readingTime = Math.max(1, Math.ceil(wordCount / 200));
 
           const senderName = sender?.name || senderEmail.split('@')[0];
+          const groupName = allowedEmails.get(senderEmail) || 'Général';
 
           const { error: insertError } = await supabase.from('newsletters').insert({
             gmail_id: gmailId,
@@ -134,7 +137,8 @@ async function main() {
             body_html: bodyHtml,
             received_at: parsed.date ? parsed.date.toISOString() : new Date().toISOString(),
             is_read: false,
-            reading_time_minutes: readingTime
+            reading_time_minutes: readingTime,
+            group_name: groupName // 💡 Nouvelle colonne
           });
 
           if (!insertError) {
