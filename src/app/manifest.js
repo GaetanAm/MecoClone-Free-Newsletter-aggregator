@@ -5,7 +5,7 @@ export default function manifest() {
     description: 'Mon lecteur de newsletters privé',
     start_url: '/',
     display: 'standalone',
-    background_color: '#ffffff',
+    background_color: '#0f172a',
     theme_color: '#0f172a',
     icons: [
       {

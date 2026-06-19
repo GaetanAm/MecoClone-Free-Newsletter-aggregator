@@ -233,7 +233,17 @@ export default function Home() {
 
   // 2. Nombre total de newsletters lues (historique)
   const totalReadCount = newsletters.filter(nl => nl.is_read).length;
-
+  
+  // 💡 Écran de chargement complet pour le premier démarrage de l'application
+  if (loading && newsletters.length === 0) {
+    return (
+      <div className="fixed inset-0 bg-slate-900 flex flex-col items-center justify-center gap-4 z-50">
+        <span className="text-5xl animate-bounce">📬</span>
+        <h1 className="text-white font-bold text-xl tracking-wide">Mon Méco</h1>
+        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mt-2"></div>
+      </div>
+    );
+  }
   return (
     <main className="flex h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden pb-16 md:pb-0 relative">
       
