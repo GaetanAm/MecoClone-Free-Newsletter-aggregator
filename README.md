@@ -38,7 +38,7 @@ Une application web progressive (PWA) de lecture de newsletters inspirée de Mec
         ├── manifest.js       # Configuration de l'installation PWA
         ├── globals.css       # Styles généraux et configurations Tailwind
         └── page.tsx          # Application Single Page avec architecture à onglets globale
-
+```
 ## ⚙️ Variables d'Environnement Requises
 
 Pour faire tourner le projet localement ou sur vos plateformes de déploiement (Vercel & GitHub Secrets), créez un fichier `.env.local` contenant :
@@ -55,7 +55,7 @@ GMAIL_APP_PASSWORD="votre_mot_de_passe_d_application_gmail"
 # Web Push Security Configuration (VAPID)
 NEXT_PUBLIC_VAPID_PUBLIC_KEY="votre_cle_publique_vapid"
 VAPID_PRIVATE_KEY="votre_cle_privee_vapid"
-
+```
 ## 🔧 Installation locale
 
 1. **Cloner le dépôt** :
@@ -66,15 +66,15 @@ VAPID_PRIVATE_KEY="votre_cle_privee_vapid"
 2. **Installer les dépendances** :
 ```bash
    npm install
-
+```
 3. **Générer les clés VAPID** :
 ```bash
    npx web-push generate-vapid-keys
-
+```
 4. **Lancer le serveur de développement** :
 ```bash
    npm run dev
-
+```
 ## 🔒 Configuration de la Base de Données (Supabase)
 
 Exécutez le script SQL suivant dans le **SQL Editor** de votre tableau de bord Supabase pour initialiser la structure des tables nécessaires au projet :
@@ -123,7 +123,7 @@ alter table allowed_senders disable row level security;
 alter table newsletters disable row level security;
 alter table push_subscriptions disable row level security;
 alter table highlights disable row level security;
-
+```
 ## 📝 Licence
 
 Ce projet est sous licence MIT. N'hésitez pas à le forker et à l'adapter pour vos besoins de lecture personnels !
